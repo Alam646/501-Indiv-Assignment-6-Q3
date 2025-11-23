@@ -12,6 +12,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -41,7 +42,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.example.indivassignment6q3.ui.theme.IndivAssignment6Q3Theme
 import kotlinx.coroutines.Dispatchers
@@ -74,9 +77,13 @@ fun SoundMeterScreen() {
             ) == PackageManager.PERMISSION_GRANTED
         )
     }
-
+    
     // State for Decibels
     var dbLevel by remember { mutableFloatStateOf(0f) }
+    
+    // Threshold for "Loud"
+    val THRESHOLD_DB = 80f
+    val isTooLoud = dbLevel > THRESHOLD_DB
 
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
@@ -120,17 +127,14 @@ fun SoundMeterScreen() {
                                     max = value
                                 }
                             }
-
+                            
                             // Convert Amplitude to Decibels
-                            // dB = 20 * log10(amplitude)
-                            // We handle the case where max is 0 (silence)
                             val db = if (max > 0) {
                                 20 * log10(max.toDouble())
                             } else {
                                 0.0
                             }
-
-                            // Update state (smoothing could be added here if needed)
+                            
                             dbLevel = db.toFloat()
                         }
                     }
@@ -141,7 +145,16 @@ fun SoundMeterScreen() {
         }
     }
 
-    Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+    // Animate background color slightly when too loud
+    val backgroundColor by animateColorAsState(
+        targetValue = if (isTooLoud) Color(0xFFFFEBEE) else MaterialTheme.colorScheme.background,
+        label = "bgColor"
+    )
+
+    Scaffold(
+        modifier = Modifier.fillMaxSize(),
+        containerColor = backgroundColor
+    ) { innerPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -163,19 +176,16 @@ fun SoundMeterScreen() {
                     text = "${String.format("%.1f", dbLevel)} dB",
                     style = MaterialTheme.typography.displayLarge,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
+                    color = if (isTooLoud) Color.Red else MaterialTheme.colorScheme.primary
                 )
                 Spacer(modifier = Modifier.height(24.dp))
 
                 // Visual Sound Meter (Progress Bar)
-                // We normalize dB to a 0.0 - 1.0 range for the progress bar.
-                // Assuming 0 dB is silence and 100 dB is very loud max.
                 val animatedProgress by animateFloatAsState(
                     targetValue = (dbLevel / 100f).coerceIn(0f, 1f),
                     label = "dbProgress"
                 )
-
-                // Determine color based on loudness
+                
                 val barColor = when {
                     dbLevel < 50 -> Color.Green
                     dbLevel < 80 -> Color.Yellow
@@ -192,9 +202,37 @@ fun SoundMeterScreen() {
                     trackColor = Color.LightGray
                 )
 
-                Spacer(modifier = Modifier.height(16.dp))
-                Text("Visual Sound Meter Active")
-
+                Spacer(modifier = Modifier.height(32.dp))
+                
+                // Threshold Alert Box
+                if (isTooLoud) {
+                    Box(
+                        modifier = Modifier
+                            .background(Color.Red, RoundedCornerShape(12.dp))
+                            .padding(16.dp)
+                    ) {
+                        Text(
+                            text = "WARNING: NOISE LEVEL TOO HIGH!",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                } else {
+                    // Invisible placeholder to keep layout stable
+                     Box(
+                        modifier = Modifier
+                            .background(Color.Transparent)
+                            .padding(16.dp)
+                    ) {
+                        Text(
+                            text = " ",
+                            fontSize = 18.sp
+                        )
+                    }
+                }
+                
             } else {
                 Text("Permission Needed", style = MaterialTheme.typography.headlineSmall)
                 Button(onClick = { permissionLauncher.launch(Manifest.permission.RECORD_AUDIO) }) {
